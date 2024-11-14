@@ -1,9 +1,6 @@
---====================================================================================
--- All work by 20dka.
--- You have no permission to edit, redistribute or upload. Contact BeamMP for more info!
---====================================================================================
--- Helper functions for use in BeamMP and its extensions
---====================================================================================
+-- Copyright (C) 2024 BeamMP Ltd., BeamMP team and contributors.
+-- Licensed under AGPL-3.0 (or later), see <https://www.gnu.org/licenses/>.
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 
 --- MPHelpers API.
 --- Author of this documentation is Titch
@@ -120,6 +117,45 @@ local function tableDiff(old, new)
 	return diff, o, n
 end
 
+--- Splits the given string by the given delimeter and optionally converts the slices into the desired type
+-- @param string string Some string to be split eg. "Hello World"
+-- @param delimeter string Delimeter to split by, eg. " "
+-- @param convert_into nil/number nil = string, 1 = number, 2 = bool
+-- @return table t [1..n] = string, number or bool
+local function splitStringToTable(string, delimeter, convert_into)
+	local t = {}
+	for str in string.gmatch(string, "([^"..delimeter.."]+)") do
+		if convert_into == 1 then -- number
+			table.insert(t, tonumber(str))
+			
+		elseif convert_into == 2 then -- bool
+			if str:lower() == "false" then
+				table.insert(t, false)
+			elseif str:lower() == "true" then
+				table.insert(t, false)
+			end
+			
+		else -- string
+			table.insert(t, str)
+		end
+	end
+	return t
+end
+
+--- Reads the vehicles color directly from the obj instead of from the vehicle_manager.lua
+-- @param veh object Vehicle object from eg. be:getObjectByID(gameVehicleID)
+-- @return table paints Same format as extensions.core_vehicle_manager.getVehicleData(gameVehicleID).config.paints
+local function getColorsFromVehObj(veh)
+	local paints = {}
+
+	local metallicPaintData = veh:getMetallicPaintData()
+	paints[1] = createVehiclePaint(veh.color, metallicPaintData[1])
+	paints[2] = createVehiclePaint(veh.colorPalette0, metallicPaintData[2])
+	paints[3] = createVehiclePaint(veh.colorPalette1, metallicPaintData[3])
+
+	return paints
+end
+
 --- Returns a semi formatted string with information about the caller of this function.
 -- @param[opt] level number The level of the stack trace to retrieve.
 -- @return string A string containing the source file, line number, name type, and name of the caller.
@@ -202,6 +238,8 @@ end
 
 M.b64encode                = b64encode
 M.b64decode                = b64decode
+M.getColorsFromVehObj      = getColorsFromVehObj
+M.splitStringToTable       = splitStringToTable
 
 M.onExtensionLoaded = onExtensionLoaded
 M.onInit = function() setExtensionUnloadMode(M, "manual") end

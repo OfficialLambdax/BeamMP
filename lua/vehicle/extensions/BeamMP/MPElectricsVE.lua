@@ -1,9 +1,6 @@
---====================================================================================
--- All work by Jojos38, Titch2000, 20dka.
--- You have no permission to edit, redistrobute or upload. Contact BeamMP for more info!
---====================================================================================
--- Electrics (and features derived from it) sync related functions
---====================================================================================
+-- Copyright (C) 2024 BeamMP Ltd., BeamMP team and contributors.
+-- Licensed under AGPL-3.0 (or later), see <https://www.gnu.org/licenses/>.
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 
 local M = {}
 
@@ -217,6 +214,9 @@ local disallowedKeys = {
 	["accXSmooth"] = 1,
 	["accYSmooth"] = 1,
 	["accZSmooth"] = 1,
+	["engineRunning"] = 1, -- engine and ignition is synced in MPPowertrainVE
+	["ignition"] = 1,
+	["ignitionLevel"] = 1,
 	---modded vehicles --
 	-- me262 plane ------
 	["inst_pitch"] = 1,
@@ -299,27 +299,18 @@ end
 
 local lastLeftSignal = 0
 local lastRightSignal = 0
-local lastHazards = 0
-local remoteignition = true
-local remoteengineRunning = 1
 local function applyElectrics(data)
 	local decodedData = jsonDecode(data) -- Decode received data
 	if (decodedData) then -- If received data is correct
-		if not decodedData.signal_left_input then decodedData.signal_left_input = lastLeftSignal end
-		if not decodedData.signal_right_input then decodedData.signal_right_input = lastRightSignal end
-		if not decodedData.hazard_enabled then decodedData.hazard_enabled = lastHazards end
-
-		lastLeftSignal = decodedData.signal_left_input
-		lastRightSignal = decodedData.signal_right_input
-		lastHazards = decodedData.hazard_enabled
-
-		if decodedData.hazard_enabled == 1 then -- Apply hazard lights
-			electrics.set_warn_signal(decodedData.hazard_enabled)
-		end
-		if decodedData.hazard_enabled == 0 then -- Apply left signal value
-			if electrics.values.signal_left_input ~= decodedData.signal_left_input then
+		if decodedData.signal_left_input or decodedData.signal_right_input then
+			electrics.set_warn_signal(0) -- set all signals to 0 so we know the states
+			lastLeftSignal = decodedData.signal_left_input or lastLeftSignal
+			lastRightSignal = decodedData.signal_right_input or lastRightSignal
+			if lastLeftSignal == 1 and lastRightSignal == 1 then
+				electrics.set_warn_signal(1)
+			elseif lastLeftSignal == 1 then
 				electrics.toggle_left_signal()
-			elseif electrics.values.signal_right_input ~= decodedData.signal_right_input then
+			elseif lastRightSignal == 1 then
 				electrics.toggle_right_signal()
 			end
 		end
@@ -356,83 +347,77 @@ local function applyElectrics(data)
 			controller.getControllerSafe("lineLock").setLineLock(decodedData.linelock)
 		end
 
-		-- Ignition syncing
-		if decodedData.ignition ~= nil then
-			remoteignition = decodedData.ignition
-		end
-		if decodedData.engineRunning then
-			remoteengineRunning = decodedData.engineRunning
-		end
-		if electrics.values.ignition ~= (remoteignition and 1 or 0) or electrics.values.engineRunning ~= remoteengineRunning then
-			local engine = powertrain.getDevice("mainEngine")
-			if engine then
-				if remoteengineRunning ~= electrics.values.engineRunning then
-					if remoteengineRunning == 1 then
-						if engine.starterEngagedCoef == 0 then
-							engine:activateStarter()
-						end
-					elseif remoteengineRunning == 0 and engine.starterEngagedCoef == 0 then
-						engine:deactivateStarter()
-						engine:cutIgnition(1)
+		if not controllerSyncVE.isOnControllerSync then
+			-- Unicycle syncing -- for cross compatibility with non controller sync versions of beammp,
+			-- can be removed once controller sync is fully released
+			local playerController = controllerSyncVE.OGcontrollerFunctionsTable['playerController']
+			if playerController then
+				-- direction
+				if decodedData.unicycle_camera ~= nil then
+					playerController.setCameraControlData({cameraRotation = quatFromEuler(0, 0, -decodedData.unicycle_camera)})
+				end
+				-- walking left/right
+				if decodedData.unicycle_walk_x ~= nil then
+					playerController.walkLeftRightRaw(decodedData.unicycle_walk_x)
+				end
+				-- walking forward/backward
+				if decodedData.unicycle_walk_y ~= nil then
+					playerController.walkUpDownRaw(decodedData.unicycle_walk_y)
+				end
+				-- jump, check if boolean because there are sometimes 0s in the received values
+				if decodedData.unicycle_jump == true then
+					playerController.jump(1)
+				end
+				-- crouch
+				if decodedData.unicycle_crouch ~= nil then
+					playerController.crouch(decodedData.unicycle_crouch)
+				end
+				-- sprint
+				if decodedData.unicycle_speed ~= nil then
+					playerController.setSpeedCoef(decodedData.unicycle_speed)
+				end
+			end
+			-- Bus door syncing
+			if decodedData.dooropen then
+				local doorController = controllerSyncVE.OGcontrollerFunctionsTable['doors']
+				if doorController then
+					if decodedData.dooropen == 1 then
+						doorController.setBeamMin({'frontDoors', 'rearDoors'}) -- open doors
+					else
+						doorController.setBeamMax({'frontDoors', 'rearDoors'}) -- close doors
 					end
 				end
-				if electrics.values.ignition ~= (remoteignition and 1 or 0) then
-					controller.mainController.setEngineIgnition(remoteignition)
+			end
+			-- Bus suspension height syncing
+			local airbagsController = controllerSyncVE.OGcontrollerFunctionsTable['airbags']
+			if airbagsController then
+				if decodedData.kneel == 1 then
+					airbagsController.setBeamPressureLevel({'rightAxle'}, 'kneelPressure') -- sets bus to kneel height
+				elseif decodedData.rideheight == 1 then
+					airbagsController.setBeamPressureLevel({'rightAxle'}, 'maxPressure') -- sets bus to max height
+				elseif decodedData.rideheight == 0 then
+					airbagsController.setBeamDefault({'rightAxle', 'leftAxle'})	-- sets bus to default height
 				end
-				if not remoteignition and remoteengineRunning == 0 then
-					engine:deactivateStarter()
+			end
+			
+			-- ME262 missile sync
+			local missilesController = controllerSyncVE.OGcontrollerFunctionsTable['missiles']
+			if missilesController then
+				local missleID = 0
+				for i=1,11 do -- Phulcan has 11 missiles
+					if decodedData["missile"..i.."_motor"] == 1 then
+						missilesController.deployWeaponDown(i,false)
+						missilesController.deployWeaponUp()
+					end
 				end
 			end
 		end
 
-		-- Unicycle syncing
-		local playerController = controller.getController('playerController')
-		if playerController then
-			-- direction
-			if decodedData.unicycle_camera ~= nil then
-				playerController.setCameraControlData({cameraRotation = quatFromEuler(0, 0, -decodedData.unicycle_camera)})
-			end
-			-- walking left/right
-			if decodedData.unicycle_walk_x ~= nil then
-				playerController.walkLeftRightRaw(decodedData.unicycle_walk_x)
-			end
-			-- walking forward/backward
-			if decodedData.unicycle_walk_y ~= nil then
-				playerController.walkUpDownRaw(decodedData.unicycle_walk_y)
-			end
-			-- jump, check if boolean because there are sometimes 0s in the received values
-			if decodedData.unicycle_jump == true then
-				playerController.jump(1)
-			end
-			-- crouch
-			if decodedData.unicycle_crouch ~= nil then
-				playerController.crouch(decodedData.unicycle_crouch)
-			end
-			-- sprint
-			if decodedData.unicycle_speed ~= nil then
-				playerController.setSpeedCoef(decodedData.unicycle_speed)
-			end
-		end
-		-- Bus door syncing
-		if decodedData.dooropen then
-			if decodedData.dooropen == 1 then
-				controller.getControllerSafe('doors').setBeamMin({'frontDoors', 'rearDoors'}) -- open doors
-			else
-				controller.getControllerSafe('doors').setBeamMax({'frontDoors', 'rearDoors'}) -- close doors
-			end
-		end
-		-- Bus suspension height syncing
-		if decodedData.kneel == 1 then
-			controller.getControllerSafe('airbags').setBeamPressureLevel({'rightAxle'}, 'kneelPressure') -- sets bus to kneel height
-		elseif decodedData.rideheight == 1 then
-			controller.getControllerSafe('airbags').setBeamPressureLevel({'rightAxle'}, 'maxPressure') -- sets bus to max height
-		elseif decodedData.rideheight == 0 then
-			controller.getControllerSafe('airbags').setBeamDefault({'rightAxle', 'leftAxle'})	-- sets bus to default height
-		end
 		-- ESC Mode syncing
 		if decodedData.escMode then
 			setEsc(decodedData.escMode)
 		end
+
 		-- ABS Behavior syncing
 		if decodedData.absMode and wheels then
 			wheels.setABSBehavior(decodedData.absMode)
@@ -442,13 +427,6 @@ local function applyElectrics(data)
 			controller.getControllerSafe('compressionBrake').setCompressionBrakeCoef(decodedData.mainEngine_compressionBrake_setting)
 		end
 
-		-- ME262 missile sync
-		if decodedData.missile4_motor == 1 or decodedData.missile3_motor == 1 or decodedData.missile2_motor == 1 or decodedData.missile1_motor == 1 then
-			if controller.getController('missiles') then
-				controller.mainController.deployWeaponDown()
-				controller.mainController.deployWeaponUp()
-			end
-		end
 		-- DH Super bolide
 		if decodedData.swingwing and supertact then
 			if decodedData.swingwing ~= localSwingwing then
@@ -456,6 +434,7 @@ local function applyElectrics(data)
 				localSwingwing = decodedData.swingwing
 			end
 		end
+
 		-- Anything else
 		for k,v in pairs(decodedData) do
 			electrics.values[k] = v
@@ -472,11 +451,8 @@ local function onReset()
 		electrics.values.absMode = settings.getValue("absBehavior", "realistic")
 	end
 	if v.mpVehicleType == "R" then
-		controller.mainController.setGearboxMode("realistic")
 		if wheels then wheels.setABSBehavior(electrics.values.absMode or "realistic") end
 		localSwingwing = 0
-		remoteignition = true
-		remoteengineRunning = 1
 	end
 end
 

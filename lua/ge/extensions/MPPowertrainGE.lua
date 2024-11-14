@@ -1,7 +1,6 @@
---====================================================================================
--- All work by jojos38 & Titch2000.
--- You have no permission to edit, redistribute or upload. Contact BeamMP for more info!
---====================================================================================
+-- Copyright (C) 2024 BeamMP Ltd., BeamMP team and contributors.
+-- Licensed under AGPL-3.0 (or later), see <https://www.gnu.org/licenses/>.
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 
 --- MPPowertrainGE API.
 --- Author of this documentation is Titch
@@ -46,7 +45,26 @@ local function applyLivePowertrain(data, serverVehicleID)
 	local gameVehicleID = MPVehicleGE.getGameVehicleID(serverVehicleID) or -1 -- get gameID
 	local veh = be:getObjectByID(gameVehicleID)
 	if veh then
-		veh:queueLuaCommand("MPPowertrainVE.applyLivePowertrain(\'"..data.."\')")
+		veh:queueLuaCommand("MPPowertrainVE.applyLivePowertrain(mime.unb64(\'".. MPHelpers.b64encode(data) .."\'))")
+	end
+end
+
+
+local function sendEngineData(data, gameVehicleID)
+	if MPGameNetwork.launcherConnected() then
+		local serverVehicleID = MPVehicleGE.getServerVehicleID(gameVehicleID) -- Get serverVehicleID
+		if serverVehicleID and MPVehicleGE.isOwn(gameVehicleID) then -- If serverVehicleID not null and player own vehicle
+			MPGameNetwork.send('Ye:'..serverVehicleID..":"..data) -- Send powertrain to server
+		end
+	end
+end
+
+
+local function applyEngineData(data, serverVehicleID)
+	local gameVehicleID = MPVehicleGE.getGameVehicleID(serverVehicleID) or -1 -- get gameID
+	local veh = be:getObjectByID(gameVehicleID)
+	if veh then
+		veh:queueLuaCommand("MPPowertrainVE.applyEngineData(mime.unb64(\'".. MPHelpers.b64encode(data) .."\'))")
 	end
 end
 
@@ -55,8 +73,17 @@ end
 -- @param rawData string The raw message data.
 local function handle(rawData)
 	local code, serverVehicleID, data = string.match(rawData, "^(%a)%:(%d+%-%d+)%:({.*})")
+
+	local veh = MPVehicleGE.getVehicles()[serverVehicleID]
+
+	if not veh or veh.isLocal then
+		return
+	end
+
 	if code == "l" then
 		applyLivePowertrain(data, serverVehicleID)
+	elseif code == "e" then
+		applyEngineData(data, serverVehicleID)
 	else
 		log('W', 'handle', "Received unknown packet '"..tostring(code).."'! ".. rawData)
 	end
@@ -67,6 +94,7 @@ end
 M.tick                   = tick
 M.handle                 = handle
 M.sendLivePowertrain     = sendLivePowertrain
+M.sendEngineData		 = sendEngineData
 M.onInit = function() setExtensionUnloadMode(M, "manual") end
 
 

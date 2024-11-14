@@ -1,7 +1,6 @@
---====================================================================================
--- All work by jojos38 & Titch2000.
--- You have no permission to edit, redistribute or upload. Contact us for more info!
---====================================================================================
+-- Copyright (C) 2024 BeamMP Ltd., BeamMP team and contributors.
+-- Licensed under AGPL-3.0 (or later), see <https://www.gnu.org/licenses/>.
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 
 --- nodesGE API.
 --- Author of this documentation is Titch
@@ -54,6 +53,21 @@ local function sendBreakGroups(data, gameVehicleID)
 end
 
 
+local function sendControllerData(data, gameVehicleID)
+	if MPGameNetwork.launcherConnected() then
+		local serverVehicleID = MPVehicleGE.getServerVehicleID(gameVehicleID)
+		if serverVehicleID and MPVehicleGE.isOwn(gameVehicleID) then
+			local decodedData = jsonDecode(data)
+			if decodedData.vehID then
+				decodedData.vehID = MPVehicleGE.getServerVehicleID(decodedData.vehID)
+			end
+			data = jsonEncode(decodedData)
+			MPGameNetwork.send('Xc:'..serverVehicleID..":"..data)
+		end
+	end
+end
+
+
 --- This function serves to send the nodes data received for another players vehicle from GE to VE, where it is handled.
 -- @param data table The data to be applied as nodes
 -- @param serverVehicleID string The VehicleID according to the server.
@@ -61,7 +75,7 @@ local function applyNodes(data, serverVehicleID)
 	local gameVehicleID = MPVehicleGE.getGameVehicleID(serverVehicleID) or -1
 	local veh = be:getObjectByID(gameVehicleID)
 	if veh then
-		veh:queueLuaCommand("nodesVE.applyNodes(\'"..data.."\')")
+		veh:queueLuaCommand("nodesVE.applyNodes(mime.unb64(\'".. MPHelpers.b64encode(data) .."\'))")
 	end
 end
 
@@ -73,7 +87,7 @@ local function applyBreakGroups(data, serverVehicleID)
 	local gameVehicleID = MPVehicleGE.getGameVehicleID(serverVehicleID) or -1
 	local veh = be:getObjectByID(gameVehicleID)
 	if veh then
-		veh:queueLuaCommand("nodesVE.applyBreakGroups(\'"..data.."\')")
+		veh:queueLuaCommand("nodesVE.applyBreakGroups(mime.unb64(\'".. MPHelpers.b64encode(data) .."\'))")
 	end
 end
 
@@ -82,10 +96,19 @@ end
 -- @param rawData string The raw message data.
 local function handle(rawData)
 	local code, serverVehicleID, data = string.match(rawData, "^(%a)%:(%d+%-%d+)%:(.*)")
+
+	local veh = MPVehicleGE.getVehicles()[serverVehicleID]
+
+	if not veh or veh.isLocal then
+		return
+	end
+
 	if code == "n" then
 		applyNodes(data, serverVehicleID)
 	elseif code == "g" then
 		applyBreakGroups(data, serverVehicleID)
+	elseif code == "c" then
+		MPControllerGE.applyControllerData(data, serverVehicleID)
 	else
 		log('W', 'handle', "Received unknown packet '"..tostring(code).."'! ".. rawData)
 	end
@@ -100,5 +123,6 @@ M.applyNodes = applyNodes
 M.onInit = function() setExtensionUnloadMode(M, "manual") end
 
 M.sendBreakGroups  = sendBreakGroups
+M.sendControllerData  = sendControllerData
 
 return M

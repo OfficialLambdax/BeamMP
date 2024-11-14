@@ -1,3 +1,7 @@
+// Copyright (C) 2024 BeamMP Ltd., BeamMP team and contributors.
+// Licensed under AGPL-3.0 (or later), see <https://www.gnu.org/licenses/>.
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 var highlightedServer;
 var servers = [];
 var official = [];
@@ -35,7 +39,7 @@ function($scope, $state, $timeout, $document) {
 	};
 
 	$scope.openExternalLink = function(url) {
-		bngApi.engineLua(`openWebBrowser("`+url+`")`);
+		bngApi.engineLua(`MPCoreNetwork.openURL("`+url+`")`);
 	}
 
 	bngApi.engineLua(`MPConfig.getConfig()`, (data) => {
@@ -119,9 +123,13 @@ function($scope, $state, $timeout, $document) {
 		var x = document.getElementById('LOGINERRORFIELD').textContent= data;
 	});
 	
-	// Try to auto login
-	// bngApi.engineLua('MPCoreNetwork.autoLogin()');
-	// autologin is called from lua
+	//Workaround for sticky login UI
+	$scope.$on('actuallyLoggedIn', function (event, data) {
+		if (data == true) {
+			$state.go('menu.multiplayer.servers');
+		}
+	});
+	bngApi.engineLua('MPCoreNetwork.isLoggedIn()');
 }])
 
 
@@ -129,11 +137,36 @@ function($scope, $state, $timeout, $document) {
 /* //////////////////////////////////////////////////////////////////////////////////////////////
 *	MAIN CONTROLLER
 */ //////////////////////////////////////////////////////////////////////////////////////////////
-.controller('MultiplayerController', ['$scope', '$state', '$timeout', '$mdDialog', 
-function($scope, $state, $timeout, $mdDialog) {
+.controller('MultiplayerController', ['$scope', '$state', '$timeout', '$mdDialog', '$filter', 'ConfirmationDialog', 'toastr', 
+function($scope, $state, $timeout, $mdDialog, $filter, ConfirmationDialog, toastr) {
 	var vm = this;
 	bngApi = bngApi;
 	mdDialog = $mdDialog;
+
+	// Trigger Warning Prompt
+	$scope.$on('DownloadSecurityPrompt', function (event, data) {
+		var o = true
+		ConfirmationDialog.open(
+			"ui.multiplayer.security.title", "ui.multiplayer.security.prompt",
+			[
+				{ label: "ui.multiplayer.security.no_return", key: false, isCancel: true },
+				// { label: "Enter and don't show this again", key: true },
+				{ label: "ui.multiplayer.security.accept_proceed", key: true, default: true },
+			],
+			{ class: "experimental" }
+		).then(res => {
+			if (res) {
+				o = false
+				bngApi.engineLua(`MPCoreNetwork.approveModDownload()`);
+			}
+			if (o) {
+				o = false
+				bngApi.engineLua(`MPCoreNetwork.rejectModDownload()`);
+				vm.closeLoadingPopup()
+			}			
+		});
+	})
+
 	// Display the servers list page once the page is loaded
 	$scope.$on('$stateChangeSuccess', async function (event, toState, toParams, fromState, fromParams) {
 		//console.log(toState.url);
@@ -216,7 +249,7 @@ function($scope, $state, $timeout, $mdDialog) {
 		//console.log('Clicked')
 		var ip = document.getElementById('directip').value.trim();
 		var port = document.getElementById('directport').value.trim();
-		document.getElementById('LoadingServer').style.display = 'block';
+		document.getElementById('LoadingServer').style.display = 'flex';
 		bngApi.engineLua(`MPCoreNetwork.connectToServer("${ip}","${port}")`);
 	};
 
@@ -253,6 +286,23 @@ function($scope, $state, $timeout, $mdDialog) {
 		vm.refreshList();
 	};
 
+	vm.directConnectFavorite = async function() {
+		var ip = document.getElementById('directip').value.trim();
+		var port = document.getElementById('directport').value.trim();
+
+		var valid = (ip.length > 0) && (port.length > 0) && !isNaN(port)
+		if (!valid) return;
+		var name = ip + ":" + port;
+		var server = {
+			cversion: await getLauncherVersion(), ip: ip, location: "--", map: "", maxplayers: "0", players: "0",
+			owner: "", playersList: "", sdesc: "", sname: name, strippedName: name,
+			custom: true, port: port
+		}
+		favorites = await getFavorites();
+		addFav(server)
+		toastr.info($filter('translate')('ui.multiplayer.favoritedToast.description'), $filter('translate')('ui.multiplayer.favoritedToast.title'));
+	}
+
 	vm.stateName = $state.current.name;
 	bngApi.engineLua('settings.requestState()');
 	$scope.$on('$stateChangeSuccess', function (event, toState, toParams, fromState, fromParams) {
@@ -283,6 +333,65 @@ function($scope, $state, $timeout, $mdDialog) {
 		
 		document.getElementById('OriginalLoadingStatus').setAttribute("hidden", "hidden");
 		document.getElementById('LoadingStatus').removeAttribute("hidden");
+	});
+
+
+	vm.showMessage = function() {
+		openExternalLink("https://beammp.gg/patreonbenefits");
+	}
+
+	$scope.$on('authReceived', function (event, data) {
+		let nameElement = document.getElementById("serverlist-profile-name")
+		let idElement = document.getElementById("serverlist-profile-id")
+		let avatarElement = document.getElementById("serverlist-profile-avatar")
+
+		if (Object.keys(data).length > 1) {
+			let patreonText = $filter('translate')('ui.multiplayer.patreon.message.user')
+
+			let banner = document.getElementById("topRightStatus")
+
+			if (data.role == "EA") {
+				patreonText = $filter('translate')('ui.multiplayer.patreon.message.ea')
+				banner.children[0].style.display = "none"
+				banner.style.color = "#fe8cff";
+			} else {
+				banner.children[0].style.display = ""
+				banner.style.color = "white";
+			}
+
+			banner.firstChild.nodeValue = patreonText
+			banner.children[0].style.color = "var(--bng-orange)"
+			banner.children[0].children[0].innerText = $filter('translate')('ui.multiplayer.patreon.button.user')
+
+			if (data.color != null)
+				nameElement.style.backgroundColor = data.color
+			else
+				nameElement.style.backgroundColor = "rgba(0, 0, 0, 0)"
+
+			nameElement.textContent = data.username;
+			avatarElement.src = data.avatar;
+
+			if (data.id != null) {
+				nameElement.style.cursor = "pointer";
+				nameElement.onclick = function() {
+					openExternalLink("https://forum.beammp.com/u/" + data.username + "/summary");
+				}
+	
+				idElement.textContent = "ID: " + data.id
+				idElement.onclick = function() {
+					bngApi.engineLua(`setClipboard("`+data.id+`")`);
+					toastr.info("Copied ID to clipboard")
+				}
+			} else {
+				idElement.textContent = "";
+				nameElement.onclick = null;
+				nameElement.style.cursor = "default";
+			}
+		} else {
+			nameElement.textContent = "";
+			idElement.textContent = "";
+			avatarElement.removeAttribute("src");
+		}
 	});
 
 	vm.exit = function ($event) {
@@ -331,6 +440,9 @@ function($scope, $state, $timeout) {
 		vm.selectMap = "Any"
 		vm.searchText = ""
 	}
+	
+	// Resize the server list
+	setServersTableHeight();
 
 	bngApi.engineLua('MPCoreNetwork.requestServerList()');
 
@@ -422,6 +534,9 @@ function($scope, $state, $timeout) {
 		vm.selectMap = "Any"
 		vm.searchText = ""
 	}
+	
+	// Resize the server list
+	setServersTableHeight();
 
 	bngApi.engineLua('MPCoreNetwork.requestServerList()');
 
@@ -509,6 +624,9 @@ function($scope, $state, $timeout) {
 		vm.selectMap = "Any"
 		vm.searchText = ""
 	}
+	
+	// Resize the server list
+	setServersTableHeight();
 
 	bngApi.engineLua('MPCoreNetwork.requestServerList()');
 
@@ -597,6 +715,9 @@ function($scope, $state, $timeout) {
 		vm.selectMap = "Any"
 		vm.searchText = ""
 	}
+	
+	// Resize the server list
+	setServersTableHeight();
 
 	bngApi.engineLua('MPCoreNetwork.requestServerList()');
 
@@ -666,6 +787,9 @@ function($scope, $state, $timeout) {
 function($scope, $state, $timeout) {
 	var vm = this;
 	
+	// Resize the server list
+	setServersTableHeight();
+	
 	vm.searchText = "";
 
 	bngApi.engineLua('MPCoreNetwork.sendBeamMPInfo()'); // request cached server lsit
@@ -729,6 +853,9 @@ function($scope, $state, $timeout) {
 	vm.selectMap = "Any";
 	vm.searchText = "";
 	bngApi.engineLua('MPCoreNetwork.sendBeamMPInfo()'); // request cached server list
+	
+	// Resize the server list
+	setServersTableHeight();
 
 	vm.exit = function ($event) {
 		if ($event)
@@ -1027,15 +1154,19 @@ function modCount(s) {
 
 function modList(s) {
 	var modarray = s.split(';');
-	//console.log(modarray);
-	s = "";
+	
+	// Sort the mod array alphabetically
+  	modarray.sort();
 
-	for (var i=0; i<modarray.length-1; i++){
-		var modName = modarray[i].split('/').pop();
-		modName = modName.replace(".zip","");
-		s += modName;
-		//if (i<modarray.length-2)
+	s = "";
+	for (var i=0; i<modarray.length; i++){
+		if (modarray[i] != '') {
+			var modName = modarray[i].split('/').pop();
+			modName = modName.replace(".zip","");
+			s += modName;
+			//if (i<modarray.length-2)
 			s += ", ";
+		}
 	}
 	//console.log(s);
 	s = s.substring(0, s.length -2);
@@ -1198,11 +1329,7 @@ function addRecent(server, isUpdate) { // has to have name, ip, port
 }
 
 function openExternalLink(url){
-	bngApi.engineLua(`mp_open_url("`+url+`")`);
-}
-
-function openForumLink(){
-	openExternalLink("http://forum.beammp.com");
+	bngApi.engineLua(`MPCoreNetwork.openURL("`+url+`")`);
 }
 
 function getServerInfoHTML(d) {
@@ -1256,12 +1383,12 @@ function createRow(table, server, bgcolor, bngApi, isFavorite, isRecent, sname) 
 		<td style="background-color:${bgcolor}; font-size: initial;">${server.players}/${server.maxplayers}</td>
 	`;*/
 	newRow.innerHTML = `
-		<td style="background-color:${bgcolor}; font-size: initial; padding-left: 3px; text-align: right; padding-right: 10px;"><img src="local://local/ui/modules/multiplayer/flags/${server.location.toLowerCase()}.png" class="flag flag-${server.location}"></img> ${server.location}</td>
+		<td style="background-color:${bgcolor}; font-size: initial; padding-left: 3px; text-align: right; padding-right: 10px;"><img src="local://local/ui/modules/multiplayer/flags/${server.location.toLowerCase()}.png" class="flag"></img> ${server.location}</td>
 		<td style="background-color:${bgcolor};">${formatServerName(sname)}</td>
 		<td style="background-color:${bgcolor}; font-size: initial;">${SmoothMapName(server.map)}</td>
 		<td style="background-color:${bgcolor}; font-size: initial;">${server.players}/${server.maxplayers}</td>
 	`;
-	newRow.onclick = function() { select(this, bngApi); };
+	newRow.onclick = function() { select(this, bngApi, server.official); };
 }
 
 // /!\ IMPORTANT /!\ //// TYPE 0 = Normal / 1 = Favorites / 2 = Recents
@@ -1284,7 +1411,7 @@ async function populateTable(tableTbody, servers, type, searchText = '', checkIs
 		// Filter by empty or full
 		else if(checkIsEmpty && server.players > 0) continue;
 		else if(checkIsNotEmpty && server.players == 0) continue;
-		else if(checkIsNotFull && server.players >= server.maxplayers) continue;
+		else if(checkIsNotFull && server.players >= parseInt(server.maxplayers)) continue;
 		
 		// Filter by mod size
 		else if(checkModSlider && sliderMaxModSize * 1048576 < server.modstotalsize) continue;
@@ -1340,7 +1467,7 @@ async function populateTable(tableTbody, servers, type, searchText = '', checkIs
 }
 
 // Used to connect to the backend with ids
-function connect(ip, port, name) {
+function connect(ip, port, name, skipModWarning = false) {
 	console.log("Attempting to call connect to server...")
 	// Add server to recents
 	addRecent(highlightedServer);
@@ -1348,13 +1475,13 @@ function connect(ip, port, name) {
 	document.getElementById('OriginalLoadingStatus').removeAttribute("hidden");
 	document.getElementById('LoadingStatus').setAttribute("hidden", "hidden");
 	// Show the connecting screen
-	document.getElementById('LoadingServer').style.display = 'block'
+	document.getElementById('LoadingServer').style.display = 'flex'
 	// Connect with ids
-	bngApi.engineLua('MPCoreNetwork.connectToServer("' + ip + '", ' + port + ',"' + name + '")');
+	bngApi.engineLua('MPCoreNetwork.connectToServer("' + ip + '", ' + port + ',"' + name + '", ' + skipModWarning + ')');
 }
 
 // Used to select a row (when it's clicked)
-function select(row, bngApi) {
+function select(row, bngApi, isOfficial) {
 	var table = document.getElementById("serversTable");
 	// Deselect the old row
 	deselect(table.selectedRow);
@@ -1377,7 +1504,7 @@ function select(row, bngApi) {
 
 	// Add the connect button
 	var connectToServerButton = document.getElementById('serverconnect-button');
-	connectToServerButton.onclick = function() { connect(row.server.ip, row.server.port, row.server.strippedName) };
+	connectToServerButton.onclick = function() { connect(row.server.ip, row.server.port, row.server.strippedName, isOfficial) };
 	
 	if (server.favorite) {
 		var removeFavButton = document.getElementById('removeFav-button');
@@ -1396,7 +1523,11 @@ async function receiveServers(data) {
 	// Parse the data to a nice looking Array
 	for (var i = 0; i < data.length; i++) {
 		var v = data[i]
-		if(v.cversion == launcherVersion){
+		const [vMajor, vMinor] = v.cversion.split('.').map(Number);
+		const [launcherMajor, launcherMinor] = launcherVersion.split('.').map(Number);
+
+		// Compare the versions
+		if (vMajor === launcherMajor && launcherMinor >= vMinor) {
 			v.strippedName = stripCustomFormatting(v.sname);
 			serversArray.push(v);
 		}
@@ -1457,6 +1588,12 @@ function sortTable(sortType, isNumber, dir) {
     });
     for(var i = 0; i < tr.length; ++i) tb.appendChild(tr[i]); // append each row in order
 	reverse = -((+reverse) || -1);
+}
+
+function setServersTableHeight() {
+	let topDistance = document.getElementById("serversTableContainer").getBoundingClientRect().top;
+	let navBarHeight = document.querySelector(".menuNavbar").getBoundingClientRect().top;
+	document.getElementById("serversTableContainer").style.maxHeight = (window.innerHeight - topDistance - (window.innerHeight - navBarHeight)) + 'px';
 }
 
 

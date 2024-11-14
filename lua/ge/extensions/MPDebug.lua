@@ -1,9 +1,6 @@
---====================================================================================
--- All work by 20dka.
--- You have no permission to edit, redistribute or upload. Contact BeamMP for more info!
---====================================================================================
--- Debug menus for monitoring BeamMP performance and more
---====================================================================================
+-- Copyright (C) 2024 BeamMP Ltd., BeamMP team and contributors.
+-- Licensed under AGPL-3.0 (or later), see <https://www.gnu.org/licenses/>.
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 
 --- MPDebug API.
 --- Author of this documentation is Titch
@@ -114,7 +111,7 @@ local function drawPlayerList()
 		--im.Text(tostring(ping))
 		--im.NextColumn()
 
-		if im.Button("Camera##"..tostring(listIndex)) then MPVehicleGE.teleportCameraToPlayer(player.name) end --focusCameraOnPlayer
+		if im.Button("Camera##"..tostring(listIndex)) then MPVehicleGE.focusCameraOnPlayer(player.name) end
 		im.NextColumn()
 
 		if im.Button("GPS##"..tostring(listIndex)) then MPVehicleGE.groundmarkerToPlayer(player.name) end

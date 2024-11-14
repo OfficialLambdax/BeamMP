@@ -1,10 +1,10 @@
---====================================================================================
--- All work by Titch2000 and jojos38.
--- You have no permission to edit, redistribute or upload. Contact us for more info!
---====================================================================================
+-- Copyright (C) 2024 BeamMP Ltd., BeamMP team and contributors.
+-- Licensed under AGPL-3.0 (or later), see <https://www.gnu.org/licenses/>.
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+
 local ver = split(beamng_versionb, ".")
 local majorVer = tonumber(ver[2])
-local compatibleVersion = 31
+local compatibleVersion = 33
 if majorVer ~= compatibleVersion then
 	log('W', 'versionCheck', 'BeamMP is incompatible with BeamNG.drive version '..beamng_versionb)
 	log('M', 'versionCheck', 'Deactivating BeamMP mod.')
@@ -64,6 +64,11 @@ setExtensionUnloadMode("MPUpdatesGE", "manual")
 load("nodesGE")
 setExtensionUnloadMode("nodesGE", "manual")
 
+load("MPControllerGE")
+setExtensionUnloadMode("MPControllerGE", "manual")
+
 -- load this file last so it can reference the others
 load("MPHelpers")
 setExtensionUnloadMode("MPHelpers", "manual")
+
+extensions.core_input_categories.beammp = { order = 999, icon = "settings", title = "BeamMP", desc = "BeamMP Controls" } --inject BeamMP input category at bottom of input categories list

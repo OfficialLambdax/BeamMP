@@ -1,7 +1,6 @@
---====================================================================================
--- All work by jojos38 & Titch2000.
--- You have no permission to edit, redistribute or upload. Contact us for more info!
---====================================================================================
+-- Copyright (C) 2024 BeamMP Ltd., BeamMP team and contributors.
+-- Licensed under AGPL-3.0 (or later), see <https://www.gnu.org/licenses/>.
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 
 --- positionGE API.
 --- Author of this documentation is Titch
@@ -67,8 +66,7 @@ local function sendVehiclePosRot(data, gameVehicleID)
 			for k,v in pairs(decoded.vel) do decoded.vel[k] = v*simspeedReal end
 			for k,v in pairs(decoded.rvel) do decoded.rvel[k] = v*simspeedReal end
 
-			data = jsonEncode(decoded)
-			MPGameNetwork.send('Zp:'..serverVehicleID..":"..data)
+			MPGameNetwork.send('Zp:'..serverVehicleID..":"..jsonEncode(decoded))
 		end
 	end
 end
@@ -88,16 +86,13 @@ local function applyPos(decoded, serverVehicleID)
 
 	decoded.localSimspeed = simspeedFraction
 
-	data = jsonEncode(decoded)
-
-
 	local veh = be:getObjectByID(vehicle.gameVehicleID)
 	if veh then -- vehicle already spawned, send data
 		if veh.mpVehicleType == nil then
 			veh:queueLuaCommand("MPVehicleVE.setVehicleType('R')")
 			veh.mpVehicleType = 'R'
 		end
-		veh:queueLuaCommand("positionVE.setVehiclePosRot('"..data.."')")
+		veh:queueLuaCommand("positionVE.setVehiclePosRot(mime.unb64(\'".. MPHelpers.b64encode(jsonEncode(decoded)) .."\'))")
 	end
 	local deltaDt = math.max((decoded.tim or 0) - (vehicle.lastDt or 0), 0.001)
 	vehicle.lastDt = decoded.tim
@@ -106,6 +101,7 @@ local function applyPos(decoded, serverVehicleID)
 	vehicle.ping = ping
 	vehicle.fps = 1/deltaDt
 	vehicle.position = Point3F(decoded.pos[1],decoded.pos[2],decoded.pos[3])
+	vehicle.rotation = quat(decoded.rot[1],decoded.rot[2],decoded.rot[3],decoded.rot[4])
 
 	local owner = vehicle:getOwner()
 	if owner then UI.setPlayerPing(owner.name, ping) end-- Send ping to UI
@@ -173,6 +169,13 @@ end
 -- @param rawData string The raw message data.
 local function handle(rawData)
 	local code, serverVehicleID, data = string.match(rawData, "^(%a)%:(%d+%-%d+)%:({.*})")
+
+	local veh = MPVehicleGE.getVehicles()[serverVehicleID]
+
+	if not veh or veh.isLocal then
+		return
+	end
+
 	if code == 'p' then
 		local decoded = jsonDecode(data)
 		if settings.getValue("enablePosSmoother") then
@@ -205,6 +208,36 @@ end
 local function setPosition(gameVehicleID, x, y, z) -- TODO: this is only here because there seems to be no way to set vehicle position in vehicle lua without resetting the vehicle
 	local veh = be:getObjectByID(gameVehicleID)
 	veh:setPositionNoPhysicsReset(Point3F(x, y, z))
+end
+
+local function setPositionRotationVelocity(gameVehicleID, positionData) -- this is done here because setting velocity and rotation in GE doesn't damage vehicles
+	local pos = positionData.pos
+	local newRot = positionData.rot
+	local vel = positionData.vel
+	local rvel = positionData.rvel
+	local veh = be:getObjectByID(gameVehicleID)
+
+	local localVel = veh:getVelocity()
+	local vehVel = positionData.vehVel
+
+	if math.abs(localVel.x) + math.abs(localVel.y) + math.abs(localVel.z) > (math.abs(vehVel.x) + math.abs(vehVel.y) + math.abs(vehVel.z))*5 then -- detect if velocity was a teleport
+		return
+	end
+
+	local refNodeID = veh:getRefNodeId()
+	local vehRot = quatFromDir(-veh:getDirectionVector(), veh:getDirectionVectorUp())
+	local rot = vehRot:inversed() * newRot
+	veh:setClusterPosRelRot(refNodeID, pos.x, pos.y, pos.z, rot.x, rot.y, rot.z, rot.w)
+
+	vel = vel - localVel:rotated(rot) -- setClusterPosRelRot also rotates the velocity so we have to do that as well
+	veh:applyClusterVelocityScaleAdd(refNodeID, 1, vel.x, vel.y, vel.z) -- setting velocity with the GE command doesn't destroy vehicles so we set most of the velocity here
+
+	local noCounterVelocity = positionData.noCounter or 0
+	local onlyAngularVelocity = 1
+
+	-- but since it doesn't do rotational velocity we still need to use VE
+	-- apparently GE to VE queues are really fast, so we don't need any extra prediction with this queue
+	veh:queueLuaCommand("velocityVE.setAngularVelocity("..vel.x..", "..vel.y..", "..vel.z..", "..rvel.x..", "..rvel.y..", "..rvel.z..","..onlyAngularVelocity..","..noCounterVelocity..")")
 end
 
 --- This function is used for setting the simulation speed 
@@ -245,17 +278,18 @@ local function onSettingsChanged()
 	end
 end
 
-M.applyPos          = applyPos
-M.tick              = tick
-M.handle            = handle
-M.sendVehiclePosRot = sendVehiclePosRot
-M.setPosition       = setPosition
-M.setPing           = setPing
-M.setActualSimSpeed = setActualSimSpeed
-M.getActualSimSpeed = getActualSimSpeed
-M.onPreRender       = onPreRender
-M.onSettingsChanged = onSettingsChanged
-M.posSmoother       = POSSMOOTHER -- debug entry
+M.applyPos                    = applyPos
+M.tick                        = tick
+M.handle                      = handle
+M.sendVehiclePosRot           = sendVehiclePosRot
+M.setPosition                 = setPosition
+M.setPositionRotationVelocity = setPositionRotationVelocity
+M.setPing                     = setPing
+M.setActualSimSpeed           = setActualSimSpeed
+M.getActualSimSpeed           = getActualSimSpeed
+M.onPreRender                 = onPreRender
+M.onSettingsChanged           = onSettingsChanged
+M.posSmoother                 = POSSMOOTHER -- debug entry
 M.onInit = function() setExtensionUnloadMode(M, "manual") end
 
 return M

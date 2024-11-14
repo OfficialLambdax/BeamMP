@@ -1,8 +1,6 @@
---====================================================================================
--- All work by Titch2000, 20dka, snepsnepsnep.
--- You have no permission to edit, redistribute or upload other than for the purposes of contributing. 
--- Contact BeamMP for more info!
---====================================================================================
+-- Copyright (C) 2024 BeamMP Ltd., BeamMP team and contributors.
+-- Licensed under AGPL-3.0 (or later), see <https://www.gnu.org/licenses/>.
+-- SPDX-License-Identifier: AGPL-3.0-or-later
 
 --- MPConfig API - This script sets Default settings if not present and handles session specific data.
 -- Author of this documentation is Titch2000
@@ -62,9 +60,9 @@ local function setDefaultUnicycle(configFileName)
 end
 
 local defaultSettings = {
-	autoSyncVehicles = true, nameTagShowDistance = true, enableBlobs = true, showSpectators = true, nametagCharLimit = 32,
+	autoSyncVehicles = true, nameTagShowDistance = true, enableBlobs = true, showSpectators = true, nametagCharLimit = 32, showPlayerIDs = false,
 	-- queue system
-	enableSpawnQueue = true, enableQueueAuto = true, queueSkipUnicycle = true, queueApplySpeed = 2, queueApplyTimeout = 3,
+	enableSpawnQueue = true, enableQueueAuto = true, queueSkipUnicycle = true, queueApplySpeed = 2, queueApplyTimeout = 3, highlightQueuedPlayers = true, queueWithLMB = true,
 	-- colors
 	showBlobQueued = true, blobColorQueued = "#FF6400", showBlobIllegal = true, blobColorIllegal = "#000000", showBlobDeleted = true, blobColorDeleted = "#333333",
 
@@ -93,7 +91,7 @@ local function onExtensionLoaded()
 		--settings.impl.defaults[k] = { 'local', v }
 		--settings.impl.defaultValues[k] = v
 	end
-	dump(defaultSettings)
+	--dump(defaultSettings)
 	settings.impl.invalidateCache()
 end
 
@@ -183,7 +181,12 @@ local function getFavorites()
 	end
 
 	-- Sort the data table using the comparison function
-	table.sort(favs, sortByAgeDesc)
+	if favs then
+		table.sort(favs, sortByAgeDesc)
+	else
+		log('E', 'getFavorites', 'Unable to read favorites from file or file is empty')
+		favs = {} -- Initialize favs to an empty table to avoid further errors
+	end
 
 	local cleanedServers = {}
 

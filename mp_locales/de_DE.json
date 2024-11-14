@@ -25,6 +25,7 @@
   "ui.options.multiplayer.nameTagAlternate": "Alternative Farben für Spielernamen Anzeigen ",
   "ui.options.multiplayer.nameTagShowDistance": "Zeige Distanz zum Spieler",
   "ui.options.multiplayer.debugOutput": "Debug-Ausgabe in der Konsole anzeigen",
+  "ui.options.multiplayer.launcherPort": "Launcher Port:[br]Nicht ändern außer absolut notwendig",
   "ui.options.multiplayer.launcherPortWarn": "Änderung auf eigene Gefahr",
   "ui.options.multiplayer.launcherPortDefaultPort": "Standart ist 4444",
   "ui.options.multiplayer.launcherPort.tooltip": "Den benutzerdefinierten Port, den der Launcher verwendet",
@@ -92,7 +93,7 @@
   "ui.multiplayer.description": "Titel",
   "ui.multiplayer.map": "Karte",
   "ui.multiplayer.forum": "Forum",
-  "ui.multiplayer.wiki": "Wiki",
+  "ui.multiplayer.docs": "Wiki",
   "ui.multiplayer.discord": "Discord",
   "ui.multiplayer.patreon": "Patreon",
   "ui.multiplayer.players": "Spieler",
@@ -129,5 +130,9 @@
   "ui.multiplayertos.info2": "Ausserdem findest du weitere Informationen unter ",
   "ui.common.multiplayer.sync": "Sync",
   "ui.apps.categories.multiplayer": "Mehrspieler",
-  "ui.camera.mode.passenger": "Passagier"
+  "ui.camera.mode.passenger": "Passagier",
+  "ui.multiplayer.security.no_return": "Abbrechen & Zurück",
+  "ui.multiplayer.security.accept_proceed": "Herunterladen & Beitreten",
+  "ui.multiplayer.security.title": "Server-Mods Erkannt",
+  "ui.multiplayer.security.prompt": "Der Server, dem du beitrittst, hat Mods, die automatisch heruntergeladen und installiert werden. Diese Mods können Code enthalten, der auf deinem PC ausgeführt wird und bösartig sein könnte. Bitte vergewissere dich, dass du dem/den Serverbesitzer(n) vertraust, bevor du fortfährst. Wenn du darauf vertraust, dass die Mods nicht bösartig sind, fahre jetzt auf eigenes Risiko fort. BeamMP ist nicht verantwortlich für Inhalte, die von diesem Server heruntergeladen werden."
 }

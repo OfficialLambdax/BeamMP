@@ -19,7 +19,6 @@ export default [
   // for external clients: emulation over websocket
   `${paths.MAIN_ENTRYPOINT}/comms.js`,
 
-
   // Vue START
   ...onCondition(conditions.NOT_VUE_DEV,
     inPath(paths.VUE_DIST, [
@@ -41,6 +40,12 @@ export default [
 
   // 3rd party includes
   ...inPath(paths.EXTERNAL_LIBS, [
+    // ResizeObserver polyfill for Ultralight
+    '/resize-observer-polyfill/ResizeObserver.global.js',
+
+    // :focus-visible polyfill for controller focus frame (see _focus.scss)
+    '/focus-visible-polyfill/dist/focus-visible.js',
+
     '/angular/angular.js',
     '/angular/angular-animate.js',
     '/angular/angular-aria.js',
@@ -87,6 +92,7 @@ export default [
 
     // TODO - remove when we're sure moved version is working OK and not needed to be included
     // '/crossfire-chrome.js',
+
   ]),
 
   // Controls
