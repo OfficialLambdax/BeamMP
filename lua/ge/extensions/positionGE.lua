@@ -112,6 +112,16 @@ end
 -- @tparam serverVehicleID string X-Y
 -- @tparam decoded table The data to be applied to a vehicle, needs to contain "pos", "rot", "vel", "rvel", "ping" and "tim"
 local function smoothPosExec(serverVehicleID, decoded)
+	--[[ Alternate idea
+		Buffer the unexecuted received packets in a by tim sorted table
+			[0] = packet
+			[1] = packet
+			[2] = packet
+		Tick at a specific interval (eg every 22 miliseconds)
+		Look at the buffer of packets, take packet that is closest to it.
+		If we want to exec a packet with tim 0.044 but we only have 0.022 and 0.066
+		then produce the 0.044 packet from those two. We need to calc where the car would be in relation of these two packets, not just make a median of two packets. This Idea needs to be thought through.
+	]]
 	if POSSMOOTHER[serverVehicleID] == nil then
 		local new = {}
 		new.data = decoded
@@ -136,7 +146,8 @@ local function smoothPosExec(serverVehicleID, decoded)
 		-- notes
 		-- right order 0.022 -- 0.044 -- 0.066
 		-- wrong order 0.022 -- 0.066 -- 0.044 (if 0.066 is received first, we overwrite it with 0.044 -> if 0.066 wasnt executed yet. otherwise this wouldnt be reached)
-		-- Todo: When this happens, try to calc a median packet between the two for all relevant data. eg. (decoded.pos + POSSMOOTHER[serverVehicleID].data.pos) / 2
+		-- Todo: When this happens, try to calc a median packet between the two for all relevant data. eg. (decoded.pos + POSSMOOTHER[serverVehicleID].data.pos) / 2POSSMOOTHER[serverVehicleID].data.pos) / 2
+		-- This likely proposes an issue if the tim values are to far away from each other.
 		
 		-- ensure that there is a min age distance between the remote packages of 15ms.
 		if (decoded.tim - POSSMOOTHER[serverVehicleID].last_executed_tim) < 0.015 then return nil end
