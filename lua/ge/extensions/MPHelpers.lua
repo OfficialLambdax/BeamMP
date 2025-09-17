@@ -142,6 +142,20 @@ local function splitStringToTable(string, delimeter, convert_into)
 	return t
 end
 
+-- drop in replacement for debugDrawer:drawTextAdvanced()
+local function drawTextAdvanced(pos, text, txt_color, bg_color)
+	ffi.C.BNG_DBG_DRAW_TextAdvanced(
+		pos.x, pos.y, pos.z,
+		text,
+		color(txt_color.r * 255, txt_color.g * 255, txt_color.b * 255, txt_color.a * 255),
+		true, -- use advanced text
+		false, -- twod
+		color(bg_color.r, bg_color.g, bg_color.b, bg_color.a),
+		false, -- shadow
+		false -- use z
+	)
+end
+
 --- Reads the vehicles color directly from the obj instead of from the vehicle_manager.lua
 -- @param veh object Vehicle object from eg. be:getObjectByID(gameVehicleID)
 -- @return table paints Same format as extensions.core_vehicle_manager.getVehicleData(gameVehicleID).config.paints
@@ -287,6 +301,7 @@ M.b64decode                = b64decode
 M.getColorsFromVehObj      = getColorsFromVehObj
 M.splitStringToTable       = splitStringToTable
 M.simplifyVehConfig        = simplifyVehConfig
+M.drawTextAdvanced         = drawTextAdvanced
 
 M.onExtensionLoaded = onExtensionLoaded
 M.onInit = function() setExtensionUnloadMode(M, "manual") end

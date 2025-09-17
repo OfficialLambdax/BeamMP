@@ -2463,22 +2463,24 @@ local function onPreRender(dt)
 						if settings.getValue("spectatorUnifiedColors") then
 							spectatorBackColor = ColorI(roleToInfo.USER.backcolor.r, roleToInfo.USER.backcolor.g, roleToInfo.USER.backcolor.b, math.floor(nametagAlpha*127))
 						end
-						debugDrawer:drawTextAdvanced(
-							pos, -- Location
-							String(" ".. spectators .." "), -- Text
-							ColorF(1, 1, 1, nametagAlpha), true, false, -- Foreground Color / Draw background / Wtf
-							spectatorBackColor) -- Background Color
+						
+						MPHelpers.drawTextAdvanced(
+							pos,
+							" " .. spectators .. " ",
+							ColorF(1, 1, 1, nametagAlpha),
+							spectatorBackColor
+						)
 
 						pos.z = pos.z + 0.01 -- has to be positive
 					end
 				end
 
 				-- draw main nametag
-				debugDrawer:drawTextAdvanced(
-					pos, -- Location
-					String(" " .. table.concat({prefix, name, suffix, tag, dist}) .. " "), -- Text
-					ColorF(1, 1, 1, nametagAlpha), true, false, -- Foreground Color / Draw background / Wtf
-					backColor -- Background Color
+				MPHelpers.drawTextAdvanced(
+					pos,
+					" " .. table.concat({prefix, name, suffix, tag, dist}) .. " ",
+					ColorF(1, 1, 1, nametagAlpha),
+					backColor
 				)
 			end
 			:: skip_vehicle ::
